@@ -1,10 +1,10 @@
 import requests
 from bs4 import BeautifulSoup
-import json2  # As per your request
+import json
 import re
 from collections import defaultdict
 
-# Fixed exchange rates as of today (you can update them manually if needed)
+# Fixed exchange rates as of today (can be updated manually if needed)
 exchange_rates = {
     "USD": 1,       # USD to USD
     "CAD": 0.75,    # Canadian Dollar to USD
@@ -13,16 +13,23 @@ exchange_rates = {
     # Add other currencies as necessary
 }
 
+# Function to convert currencies to USD
 def convert_to_usd(amount, currency, rates):
+    # Skip if currency is already in USD
     if currency == 'USD':
         return amount
+    
+    # Convert to USD using the fixed exchange rate if available, otherwise return the original amount
     if currency in rates:
         return amount * rates[currency]  # Convert using the fixed rate
     return amount  # If we don't have the exchange rate, return the original amount
 
+# Function to scrape from the website
 def scrape(url):
+    # Error handling
     try:
         response = requests.get(url)
+        # Error handling
         if response.status_code != 200:
             print(f"Failed to scrape. Code: {response.status_code}")
             return None
@@ -30,6 +37,8 @@ def scrape(url):
         
         # Find the script tag containing the data
         script_tag = soup.find('script', string=re.compile('window.Chuffed.campaigns'))  # Use 'string'
+
+        # Error handling if the script tag was not found
         if not script_tag:
             print("Couldn't find the campaigns script tag.")
             return None
@@ -39,6 +48,8 @@ def scrape(url):
         
         # Use regex to extract JSON-like data
         json_data_match = re.search(r'window.Chuffed.campaigns = ({.*});', script_content, re.DOTALL)
+
+        # Error handling
         if not json_data_match:
             print("Couldn't extract the JSON data.")
             return None
@@ -46,21 +57,29 @@ def scrape(url):
         json_data = json_data_match.group(1)
         
         # Convert to a proper Python dictionary
-        campaigns_data = json2.loads(json_data.replace("window.Chuffed.campaigns = ", ""))  # Keeping json2
+        campaigns_data = json.loads(json_data.replace("window.Chuffed.campaigns = ", ""))
+        
         return campaigns_data
 
+    # Error handling
     except Exception as e:
         print(f"Error: {e}")
         return None
 
+
+# Function to extract country information
 def get_country_from_location(location):
     # Split the location by commas and strip spaces, returning the last part (the country)
     return location.split(',')[-1].strip()
 
+# Function to calculate average data for display
 def calculate_campaign_metrics(data, rates):
+
+    # Calculate average money raised, target, fund percentage, and average time period for each category and location
     category_data = defaultdict(lambda: {'moneyRaised': 0, 'totalTarget': 0, 'fundPercentages': [], 'totalTimePeriods': [], 'numCampaigns': 0})
     location_data = defaultdict(lambda: {'moneyRaised': 0, 'totalTarget': 0, 'fundPercentages': [], 'totalTimePeriods': [], 'numCampaigns': 0})
 
+    # For each campaign in the extract relevant data and store them
     for campaign in data['data']:
         category = campaign.get('focus')
         location = get_country_from_location(campaign.get('location'))  # Extract only the country
@@ -95,9 +114,11 @@ def calculate_campaign_metrics(data, rates):
 
     return category_data, location_data
 
+# Function to convert days in words to number
 def extract_days_from_time(time_left_in_words):
     time_map = {"day": 1, "week": 7, "month": 30, "year": 365}  # A rough mapping for conversion to days
     time_period = 0
+    # Extract the number and unit from the time left in words (e.g., "2 days", "3 weeks", "1 month", "4 years") using regular expressions
     match = re.search(r'(\d+)\s*(day|week|month|year)', time_left_in_words)
     if match:
         number = int(match.group(1))
@@ -105,6 +126,7 @@ def extract_days_from_time(time_left_in_words):
         time_period = number * time_map.get(unit, 0)
     return time_period
 
+# Functino to find the best category and location
 def find_best(data, label):
     best_value = float('-inf')
     best_key = None
@@ -114,6 +136,7 @@ def find_best(data, label):
             best_key = key
     return best_key, best_value
 
+# Functino to calculate the average
 def calculate_averages(data):
     metrics = {
         'Average Money Raised': {},
@@ -121,6 +144,7 @@ def calculate_averages(data):
         'Average Money Raised Per Day': {}
     }
 
+    # Display the results for each category and location
     for key, value in data.items():
         num_campaigns = value['numCampaigns']
         if num_campaigns == 0:
@@ -128,7 +152,6 @@ def calculate_averages(data):
         
         # Calculate averages
         average_fund_percentage = sum(value['fundPercentages']) / num_campaigns
-        average_time_period = sum(value['totalTimePeriods']) / num_campaigns
         average_money_raised = value['moneyRaised'] / num_campaigns
         average_money_raised_per_day = value['moneyRaised'] / (sum(value['totalTimePeriods']) or 1)  # Avoid division by zero
         
@@ -146,13 +169,17 @@ def calculate_averages(data):
 
     return metrics
 
+# Display conclusion on the location and category with the best performance
 def print_conclusion(category_metrics, location_metrics):
     # Find best category and location for each metric
     print("\nConclusion:")
+
+    # For each metric
     for metric_name in ['Average Money Raised', 'Average Fund Percentage', 'Average Money Raised Per Day']:
         best_category, best_category_value = find_best(category_metrics[metric_name], "Category")
         best_location, best_location_value = find_best(location_metrics[metric_name], "Location")
         
+        # Formatting numbers
         if metric_name == 'Average Fund Percentage':
             print(f"Best {metric_name}:")
             print(f"  Category: {best_category} - {best_category_value:.2f}%")
@@ -163,9 +190,14 @@ def print_conclusion(category_metrics, location_metrics):
             print(f"  Location: {best_location} - {best_location_value:.2f} USD")
         print("-----")
 
+
+# Main function
 def main():
+    # url to the website
     url = "https://chuffed.org/discover"
     data = scrape(url)
+
+    # Error handling
     if not data:
         return
     
