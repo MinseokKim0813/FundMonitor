@@ -1,4 +1,2 @@
 requests
 beautifulsoup4
-json2
-re01
